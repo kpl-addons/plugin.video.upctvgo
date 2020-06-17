@@ -829,7 +829,7 @@ def getToken(conloc):
 		'Accept': 'application/json',
 		'X-OESP-Token': oesptoken,
 		'X-Client-Id': '1.4.23.13||Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.9 Safari/537.36',
-		'Cookie':cook,
+		#'Cookie':cook,
 		'X-OESP-Username': username,
 		'Sec-Fetch-Site': 'same-site',
 		'Sec-Fetch-Mode': 'cors',
@@ -838,7 +838,7 @@ def getToken(conloc):
 	}
 	
 	data = {"contentLocator":conloc}
-	
+
 	response = requests.post('https://web-api-pepper.horizon.tv/oesp/v2/PL/pol/web/license/token', headers=headers, json=data,verify=False)
 	responsecheck=response.text
 	response=response.json()
@@ -874,6 +874,7 @@ def getToken(conloc):
 	
 	dod=''
 	try:
+	
 		if not a:
 			dod = response['token']
 			data = {"contentLocator":conloc,"token":dod}
@@ -890,14 +891,14 @@ def getToken(conloc):
 			'Accept': 'application/json',
 			'X-OESP-Token': oesptoken,
 			'X-Client-Id': '1.4.23.13||Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.9 Safari/537.36',
-			'Cookie':cook,
+		#	'Cookie':cook,
 			'X-OESP-Username': username,
 			'Sec-Fetch-Site': 'same-site',
 			'Sec-Fetch-Mode': 'cors',
 			'Accept-Encoding': 'gzip, deflate, br',
 			'Accept-Language': 'en-US,en;q=0.9',
 		}
-
+		
 		response = requests.post('https://web-api-pepper.horizon.tv/oesp/v2/PL/pol/web/license/token', headers=headers, json=data,verify=False)
 		responsecheck=response.text
 		response=response.json()
@@ -923,7 +924,7 @@ def getMPDCON(crid,id_):
 		'X-Client-Id': '1.4.23.13||Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:71.0) Gecko/20100101 Firefox/71.0',
 		'X-OESP-Token': oesptoken,
 		'X-OESP-Username': username,
-		'Cookie':cook,
+	#	'Cookie':cook,
 	}
 
 	url='https://web-api-pepper.horizon.tv/oesp/v2/PL/pol/web/listings/%s?byLocationId=%s'%(crid,id_)
@@ -1018,7 +1019,7 @@ def Logout():
         'Accept': 'application/json',
         'X-OESP-Token': oesptoken,
         'X-Client-Id': '1.4.23.13||Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.9 Safari/537.36',
-        'Cookie':cook,
+     #   'Cookie':cook,
         'X-OESP-Username': username,
         'Sec-Fetch-Site': 'same-site',
         'Sec-Fetch-Mode': 'cors',
@@ -1066,7 +1067,7 @@ def naZadanie():
         'Accept': 'application/json',
         'X-OESP-Token': oesptoken,
         'X-Client-Id': '1.4.23.13||Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.9 Safari/537.36',
-        'Cookie':cook,
+     #   'Cookie':cook,
         'X-OESP-Username': username,
         'Sec-Fetch-Site': 'same-site',
         'Sec-Fetch-Mode': 'cors',
