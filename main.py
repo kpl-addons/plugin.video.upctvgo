@@ -968,7 +968,7 @@ def getPlayListItem(mpdcon):
         if 'index.mpd/Manifest' in orgurl:
             pocz = re.findall('(ht.+?\/\/.+?\/.+?)\/',orgurl)[0]
             zam=pocz+';vxttoken='+ playToken
-            url = orgurl.replace(pocz, zam)+'?device=BR-AVC-DASH'
+            url = (orgurl.replace(pocz, zam)+'?device=BR-AVC-DASH')
         else:
             url = orgurl.replace('/manifest.mpd', ';vxttoken=' + urllib.unquote(playToken)+'/manifest.mpd' )
         licenseKey = getLicenseKey(contentlocator, playToken,url)
@@ -1000,7 +1000,7 @@ def renew_token(orgurl):
     if 'index.mpd/Manifest' in url:
         pocz = re.findall('(ht.+?\/\/.+?\/.+?)\/',url)[0]
         zam=pocz+';vxttoken='+ playToken
-        url = url.replace(pocz, zam)+'?device=BR-AVC-DASH'
+        url = (url.replace(pocz, zam)).replace('index.mpd/Manifest','index.mpd')
     else:
         url = url.replace("/manifest.mpd", ";vxttoken=" + urllib.unquote(playToken)+'/')
     xbmc.log("new url : " + url,2)
