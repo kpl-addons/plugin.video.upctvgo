@@ -2,8 +2,6 @@
 import sys,re,os
 import six
 from six.moves import urllib_error, urllib_request, urllib_parse, http_cookiejar
-#import web_pdb
-
 
 import json
 
@@ -500,7 +498,6 @@ def ListNaZadanie(id_,pg):
     
     
     rng=str(int(pg))+'-'+str(int(pg)+29)
-  #  web_pdb.set_trace()
 
     url=id_+'&range=%s'%(str(rng))
     
@@ -509,7 +506,7 @@ def ListNaZadanie(id_,pg):
     response = r.json()
 
     grups=response["mediaGroups"]
-
+    k=0
     for grup in grups:
 
         try:
@@ -519,7 +516,9 @@ def ListNaZadanie(id_,pg):
         
     
         id = grup['id']
-        tytul = grup['title']
+
+        tytul = grup.get('title',None)
+        tytul ='.' if not tytul else tytul
         plot = grup.get('description',None)
         plot = plot if plot else tytul
         imgs = grup['images']
@@ -551,11 +550,12 @@ def ListNaZadanie(id_,pg):
             playab=False
             tytul ='%s (%s odc.)'%(PLchar(tytul),str(epiz))
         add_item(id, tytul,rys, mod, infoLabels={"plot": plot},fanart=FANART,folder=fold,IsPlayable=playab)
+        k+=1
     if (int(pg)+30)<=response['totalResults']:
         add_item(name='[COLOR yellow][I]Następna strona[/I][/COLOR]', url=id_, mode='listnazadanie', image='', infoLabels=False,folder=True, fanart=FANART,IsPlayable=False,page=pg+30)
-    
-    xbmcplugin.setContent(int(sys.argv[1]), 'videos')
-    xbmcplugin.endOfDirectory(addon_handle) 
+    if k:
+        xbmcplugin.setContent(int(sys.argv[1]), 'videos')
+        xbmcplugin.endOfDirectory(addon_handle) 
     
     
     
@@ -732,7 +732,7 @@ def ListEpisodes(crid,pg):
                 add_item('', tytul+' (brak)',rys, '  ', infoLabels={"plot": plot},fanart=FANART,folder=False,IsPlayable=True)
         except Exception as e:
             
-           #web_pdb.set_trace() 
+
             b=e
     if (int(pg)+30)<=response['totalResults']:
         add_item(name='[COLOR yellow][I]Następna strona[/I][/COLOR]', url='', mode='listepisodes', image='', infoLabels=False,folder=True, fanart=FANART,IsPlayable=False,page=pg+30)
@@ -842,8 +842,8 @@ def ListMovies(pg):
     grups=response["mediaGroups"]
     for grup in grups:
         id = grup['id']
-        tytul = grup['title']
-        plot = grup['description']
+        tytul = PLchar(grup['title'])
+        plot = PLchar(grup['description'])
         imgs = grup['images']
         rys=''
         rys2=''
@@ -1061,7 +1061,7 @@ def getLicenseKey(contentlocator, playToken,mpdurl):
     oesptoken=addon.getSetting("oespToken")
     cook=addon.getSetting("kuks")
     htmml=requests.get(mpdurl,verify=False).text
- #   web_pdb.set_trace()
+
     if 'manifest.mpd' in mpdurl:
         uri=re.findall('<ContentProtection schemeIdUri="([^"]+)">',htmml)[0]
     else:
@@ -1172,7 +1172,7 @@ def getToken(conloc,gg=False):
         sys.exit(0)
 
     try:
-     #   web_pdb.set_trace()
+
         if 'reason":"prohibited"' in responsecheck or 'code":"adultCredentialVerification"' in responsecheck and not 'code":"ipBlocked' in responsecheck:# and not 'type":"requestBody' in responsecheck:
             if not 'type":"requestBody' in responsecheck:
                 a = xbmcgui.Dialog().numeric(heading='Podaj PIN:',type=0,defaultt='')
@@ -1242,7 +1242,7 @@ def getToken(conloc,gg=False):
 
             xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Maksymalna liczba odtwarzaczy.\n Zamknij jeden z odtwarzaczy i spróbuj ponownie.',xbmcgui.NOTIFICATION_INFO, 9000,False)    
             sys.exit(0)
-        #web_pdb.set_trace()
+
         dod = response['token']
         dod = urllib_parse.quote(dod)
     except Exception as ecv:
@@ -1350,7 +1350,6 @@ def play_video(mpdcon):
         xbmcplugin.setResolvedUrl(addon_handle, True, listitem=newItem)    
 
 def getPlayListItem(mpdcon):
-   # web_pdb.set_trace()
 
     orgurl,contentlocator=mpdcon.split('*|*')
     
@@ -1500,7 +1499,7 @@ def naZadanie():
     url = 'https://www.upctv.pl/obo_pl/filmy-i-seriale/Channels.components.json'
     
     response = requests.get(url, headers=headers,verify=False).json()
-   #web_pdb.set_trace()
+
     for key, value in response.items():
         if 'contentdiscovery' in key:
 
@@ -1532,15 +1531,16 @@ def ListNaZadanie2(_id):
     }
 
 
-    #web_pdb.set_trace()
+
     url=BASURL+'/PL/pol/web/mediagroups/feeds/%s/categories?byHasCurrentVod=true&cityId=10'%str(_id)
     response = requests.get(url, headers=headers,verify=False).json()
     categs = response.get('categories',None)
     for categ in categs:
-        tyt = categ.get('title',None)
+        tyt = PLchar(categ.get('title',None))
+        
         _id2 = categ.get('id',None)
 
-        url=BASURL+'/PL/pol/web/mediagroups/feeds/%s?byCategoryIds=%s&byHasCurrentVod=true&cityId=10&includeExternalProvider=ALL&onlyGoPlayable=true&sort=playCount7|desc'%(str(_id),str(_id2))
+        url=BASURL+'/PL/pol/web/mediagroups/feeds/%s?byCategoryIds=%s&byHasCurrentVod=true&cityId=10&includeExternalProvider=ALL&onlyGoPlayable=true&sort=playCount7|desc'%(urllib_parse.quote(str(_id)),urllib_parse.quote(str(_id2)))
 
         add_item(url, tyt,icona, 'listnazadanie', infoLabels={'title':tyt,"plot": tyt},fanart=FANART,folder=True,IsPlayable=False)
     xbmcplugin.addSortMethod( handle=int( sys.argv[ 1 ] ), sortMethod=xbmcplugin.SORT_METHOD_TITLE)
