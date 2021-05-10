@@ -1413,15 +1413,28 @@ def renew_token(orgurl):
             
     contentLocator = conloc
     url = orgurl
-  #  ps = True
+
     ps = True if '/sdash' in url else False
     playToken = getToken(contentLocator,ps)
-    if 'index.mpd/Manifest' in url:
-        pocz = re.findall('(ht.+?\/\/.+?\/.+?)\/',url)[0]
-        zam=pocz+';vxttoken='+ playToken
-        url = (url.replace(pocz, zam)).replace('index.mpd/Manifest','index.mpd')
+	
+    url = url.replace("/manifest.mpd", "/")
+    
+    splitpath = url.split('/Manifest?device', 1)
+    
+    if len(splitpath) == 2:
+        url = splitpath[0] + "/"
+
+    if 'sdash/' in url:
+        spliturl = url.split('sdash/', 1)
+    
+        if len(spliturl) == 2:
+            url = '{urlpart1}sdash;vxttoken={token}/{urlpart2}'.format(urlpart1=spliturl[0], token=playToken, urlpart2=spliturl[1])
     else:
-        url = url.replace("/manifest.mpd", ";vxttoken=" + urllib_parse.unquote(playToken)+'/')
+        spliturl = url.rsplit('/', 1)
+    
+        if len(spliturl) == 2:
+            url = '{urlpart1};vxttoken={token}/{urlpart2}'.format(urlpart1=spliturl[0], token=playToken, urlpart2=spliturl[1]) 
+
     xbmc.log("new url : " + url,2)
     listitem = xbmcgui.ListItem() 
     xbmcplugin.addDirectoryItem(addon_handle, url, listitem)
