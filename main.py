@@ -2,9 +2,14 @@
 import sys,re,os
 import six
 from six.moves import urllib_error, urllib_request, urllib_parse, http_cookiejar
+try:
+    from urllib.parse import urlencode, quote_plus, quote, unquote
+except ImportError:
+    from urllib import urlencode, quote_plus, quote
 
 import json
 
+import urllib
 import requests
 import xbmcgui
 import xbmcplugin
@@ -16,6 +21,7 @@ else:
     LOGNOTICE = xbmc.LOGNOTICE
 
 import inputstreamhelper
+import time
 base_url = sys.argv[0]
 addon_handle = int(sys.argv[1])
 
@@ -54,8 +60,10 @@ UA= 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:87.0) Gecko/20100101 Firefox/87
 
 
 
-
 username = addon.getSetting("username")
+
+file_name = addon.getSetting('fname')
+path_m3u = addon.getSetting('path_m3u')
 
 def encoded_dict(in_dict):
     out_dict = {}
@@ -69,7 +77,7 @@ def encoded_dict(in_dict):
     return out_dict
     
 def build_url(query):
-    return base_url + '?' + urllib_parse.urlencode(query)
+    return base_url + '?' + urllib.parse.urlencode(query)
 
 def add_item(url, name, image, mode, movie='', folder=False, IsPlayable=False, infoLabels=False, itemcount=1, page=1,fanart=None,moviescount=0):
     list_item = xbmcgui.ListItem(label=name)
@@ -921,6 +929,7 @@ def ListChan(typ):
                     break
                 else:
                     continue
+
             fold = False
             playab = True
             mod = "playchan"
@@ -931,7 +940,6 @@ def ListChan(typ):
             add_item(mpdurl+'*|*'+conloc, PLchar(tytul),imig, mod, movie = statid, infoLabels={"plot": plot}, fanart = FANART, folder=fold,IsPlayable=playab)
 
 def LogHor():
-
     hostapi = addon.getSetting("hostapi")
     BASURL = addon.getSetting("baseurl")
 
@@ -1019,7 +1027,7 @@ def getSession():
         'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
         'Content-Type': 'application/json',
         'X-Client-Id': '4.31.13||'+UA,
-        'X-OESP-Token': urllib_parse.quote(oesptoken),
+        'X-OESP-Token': urllib.parse.quote(oesptoken),
         'X-OESP-Username': username,
         'Origin': 'https://www.upctv.pl',
         'Referer': 'https://www.upctv.pl/',
@@ -1066,16 +1074,19 @@ def getLicenseKey(contentlocator, playToken,mpdurl):
         uri=re.findall('<ContentProtection schemeIdUri="([^"]+)">',htmml)[0]
     else:
         uri=re.findall('<ContentProtection schemeIdUri="([^"]+)" cenc:default',htmml)[0]
-    lickey='User-Agent='+urllib_parse.quote(UA)+'&Content-Type=application/json&Cookie='+urllib_parse.quote(cook)+'&X-OESP-Username='+username+'&X-OESP-Token='+urllib_parse.quote(oesptoken)+'&X-OESP-DRM-SchemeIdUri='+uri+'&X-OESP-License-Token='+dod+'&X-OESP-Content-Locator='+urllib_parse.quote(contentlocator)
+    lickey='User-Agent='+urllib.parse.quote(UA)+'&Content-Type=application/json&Cookie='+urllib.parse.quote(cook)+'&X-OESP-Username='+username+'&X-OESP-Token='+urllib.parse.quote(oesptoken)+'&X-OESP-DRM-SchemeIdUri='+uri+'&X-OESP-License-Token='+dod+'&X-OESP-Content-Locator='+urllib.parse.quote(contentlocator)
     license_url=BASURL+'/PL/pol/web/license/eme'
+    
+    addon.setSetting('uri',uri) 
+    
    # license_url='https://prod.oesp.upctv.pl/oesp/v4/PL/pol/web/license/eme'
     headers5 = {
 
     'User-Agent': UA,
     'Accept': '*/*',
     'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
-    'X-OESP-Token': urllib_parse.quote(oesptoken),
-    'X-OESP-Username': urllib_parse.quote(username),
+    'X-OESP-Token': urllib.parse.quote(oesptoken),
+    'X-OESP-Username': urllib.parse.quote(username),
     'X-OESP-DRM-SchemeIdUri': uri,
     'X-OESP-License-Token': dod,
     'X-OESP-Content-Locator': contentlocator,
@@ -1085,14 +1096,14 @@ def getLicenseKey(contentlocator, playToken,mpdurl):
     'X-Client-Id': '4.31.13||'+UA,
     'Content-Type':'application/json',}
     headers5 = {
-        'User-Agent': urllib_parse.unquote(UA),
+        'User-Agent': urllib.parse.unquote(UA),
         'Accept': '*/*',
-        'Accept-Language': urllib_parse.unquote('pl,en-US;q=0.7,en;q=0.3'), #zmiana
-        'X-OESP-Token': urllib_parse.unquote(oesptoken),
-        'X-OESP-Username': urllib_parse.unquote(username),
+        'Accept-Language': urllib.parse.unquote('pl,en-US;q=0.7,en;q=0.3'), #zmiana
+        'X-OESP-Token': urllib.parse.unquote(oesptoken),
+        'X-OESP-Username': urllib.parse.unquote(username),
         'X-OESP-DRM-SchemeIdUri': uri,
-        'X-OESP-License-Token': urllib_parse.unquote(dod),
-        'X-OESP-Content-Locator': urllib_parse.unquote(contentlocator),
+        'X-OESP-License-Token': urllib.parse.unquote(dod),
+        'X-OESP-Content-Locator': urllib.parse.unquote(contentlocator),
       #  'X-OESP-License-Token-Type': 'velocix', #zmiana
         'Origin': 'https://www.upctv.pl',
         'Referer': 'https://www.upctv.pl/',
@@ -1101,14 +1112,14 @@ def getLicenseKey(contentlocator, playToken,mpdurl):
 
     addon.setSetting('heaNHL',str(headers5))
     headers5c = {
-        'User-Agent': urllib_parse.quote(UA),
+        'User-Agent': urllib.parse.quote(UA),
         'Accept': '*/*',
-        'Accept-Language': urllib_parse.quote('pl,en-US;q=0.7,en;q=0.3'), #zmiana
-        'X-OESP-Token': urllib_parse.quote(oesptoken),
-        'X-OESP-Username': urllib_parse.quote(username),
+        'Accept-Language': urllib.parse.quote('pl,en-US;q=0.7,en;q=0.3'), #zmiana
+        'X-OESP-Token': urllib.parse.quote(oesptoken),
+        'X-OESP-Username': urllib.parse.quote(username),
         'X-OESP-DRM-SchemeIdUri': uri,
-        'X-OESP-License-Token': urllib_parse.quote(dod),
-        'X-OESP-Content-Locator': urllib_parse.quote(contentlocator),
+        'X-OESP-License-Token': urllib.parse.quote(dod),
+        'X-OESP-Content-Locator': urllib.parse.quote(contentlocator),
       #  'X-OESP-License-Token-Type': 'velocix', #zmiana
         'Origin': 'https://www.upctv.pl',
         'Referer': 'https://www.upctv.pl/',
@@ -1138,7 +1149,6 @@ def getToken(conloc,gg=False):
     oesptoken=addon.getSetting("oespToken")
     cook=addon.getSetting("kuks")
     username = addon.getSetting("username")
-
     headers = {
         'Host': hostapi,
         'User-Agent': UA,
@@ -1159,11 +1169,9 @@ def getToken(conloc,gg=False):
 
     responsecheck=response.text
   #  xbmc.log('@#@responsecheck1: %s' % str(responsecheck), LOGNOTICE)
-    
-    
-    
-    
+
     response=response.json()
+
     a=''
 
     if 'code":"concurrency"' in responsecheck:
@@ -1192,16 +1200,13 @@ def getToken(conloc,gg=False):
                     responsecheck = response.text
                     response=response.json()
                  #   xbmc.log('@#@responsecheck2: %s' % str(responsecheck), LOGNOTICE)
-                    
-                    
-                    
-                
+                             
     except:
         pass
     
     dod=''
     try:
-
+    
         if not a:
             dod = response['token']
             data = {"contentLocator":conloc,"token":dod}
@@ -1227,13 +1232,15 @@ def getToken(conloc,gg=False):
         
         data = {"contentLocator":conloc}#,'drmScheme':'sdash:BR-AVC-DASH'}
         
-        
-
-
-        if 'REPLAY' in conloc:
-            data.update({"deviceId": uid(),'drmScheme':'sdash:BR-AVC-DASH'})    
+        if 'REPLAY' in conloc:           
+            addon.setSetting('deviceId',uid())
+            UID=addon.getSetting('deviceId')
+            data.update({"deviceId": UID,'drmScheme':'sdash:BR-AVC-DASH'})
+            
         if gg:
-            data.update({"deviceId": uid(),'drmScheme':'sdash:BR-AVC-DASH'})  
+            addon.setSetting('deviceId',uid())
+            UID=addon.getSetting('deviceId')
+            data.update({"deviceId": UID,'drmScheme':'sdash:BR-AVC-DASH'})  
         response = requests.post(BASURL+'/PL/pol/web/license/token', headers=headers, json=data,verify=False)
         responsecheck=response.text
       #  xbmc.log('@#@responsecheck3: %s' % str(responsecheck), LOGNOTICE)
@@ -1244,11 +1251,11 @@ def getToken(conloc,gg=False):
             sys.exit(0)
 
         dod = response['token']
-        dod = urllib_parse.quote(dod)
+        dod = urllib.parse.quote(dod)
     except Exception as ecv:
         xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Nie można odtworzyć poza siecią UPC',xbmcgui.NOTIFICATION_INFO, 8000,False)
-      #  xbmc.log('@#@blad w: %s' % str(ecv), LOGNOTICE)
-        
+   
+      #  xbmc.log('@#@blad w: %s' % str(ecv), LOGNOTICE)  
     return dod
 
 def getMPDCON(crid,id_):
@@ -1354,10 +1361,13 @@ def getPlayListItem(mpdcon):
     orgurl,contentlocator=mpdcon.split('*|*')
     
     addon.setSetting('conloc',contentlocator)
+    addon.setSetting('orgurl',orgurl)
     oesptoken=addon.getSetting("oespToken")
     
     ps = True if '/sdash' in orgurl else False
     playToken = getToken(contentlocator,ps)
+    addon.setSetting('token',playToken)
+    addon.setSetting('first_token',playToken)
     newItem=''
     url=''
     if playToken:  
@@ -1366,14 +1376,18 @@ def getPlayListItem(mpdcon):
             zam=pocz+';vxttoken='+ playToken
             url = (orgurl.replace(pocz, zam))#+'?device=BR-AVC-DASH')
             url = url+'?device=BR-AVC-DASH' if not '?device=BR-AVC-DASH' in url else url
+            addon.setSetting('source','vod')
         else:
-            url = orgurl.replace('/manifest.mpd', ';vxttoken=' + urllib_parse.unquote(playToken)+'/manifest.mpd' )
+            url = orgurl.replace('/manifest.mpd', ';vxttoken=' + urllib.parse.unquote(playToken)+'/manifest.mpd' )
+            addon.setSetting('source','livetv')
+
         licenseKey = getLicenseKey(contentlocator, playToken,url)
         UAx='Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:84.0) Gecko/20100101 Firefox/84.0'
         PROTOCOL = 'mpd'
         DRM = 'com.widevine.alpha'
         is_helper = inputstreamhelper.Helper(PROTOCOL, drm=DRM)
         
+        addon.setSetting('time_token',str(int(time.time())))#pxy_mpd
         
         headers6 = {
             'User-Agent': UA,
@@ -1386,58 +1400,28 @@ def getPlayListItem(mpdcon):
         hea= '&'.join(['%s=%s' % (name, value) for (name, value) in headers6.items()]) 
         proxyport = addon.getSetting("proxyport")
         PROXY_PATH='http://127.0.0.1:%s/licensetv='%(proxyport)
-
+        PROXY_PATH_MPD='http://127.0.0.1:%s/manifest='%(proxyport)#pxy_mpd
+        url_mpd= PROXY_PATH_MPD+url#pxy_mpd
+      
         url33 = PROXY_PATH + licenseKey
 
         LICKEY =  url33
        # xbmc.log('@#@LICKEY: %s' % str(licenseKey), LOGNOTICE)
         if is_helper.check_inputstream():
-            newItem = xbmcgui.ListItem(path=url) 
+            newItem = xbmcgui.ListItem(path=url_mpd) #pxy_mpd
           #  xbmc.log('@#@Odtwarzaurl: %s' % (url), LOGNOTICE)
             if six.PY3:
                 newItem.setProperty("inputstream", is_helper.inputstream_addon)
             else:
                 newItem.setProperty("inputstreamaddon", is_helper.inputstream_addon)
+            newItem.setProperty('inputstream.adaptive.manifest_update_parameter', 'full')
             newItem.setProperty("inputstream.adaptive.manifest_type", PROTOCOL)
             newItem.setProperty("inputstream.adaptive.license_type", DRM)
             newItem.setProperty("inputstream.adaptive.license_key", LICKEY)
-            newItem.setProperty("inputstream.adaptive.media_renewal_time",'60')
-            newItem.setProperty("inputstream.adaptive.media_renewal_url", base_url + "?mode=renew_token&url=" + orgurl) 
+            #newItem.setProperty("inputstream.adaptive.media_renewal_time",'60')
+            #newItem.setProperty("inputstream.adaptive.media_renewal_url", base_url + "?mode=renew_token&url=" + orgurl) 
 
     return url,newItem
-
-def renew_token(orgurl):
-    conloc= addon.getSetting("conloc")
-    xbmc.log('@#@mpdcon3: %s oraz %s' % (orgurl,conloc), LOGNOTICE)
-    xbmc.log("#### NEW TOKEN ####",2)
-            
-    contentLocator = conloc
-    url = orgurl
-
-    ps = True if '/sdash' in url else False
-    playToken = getToken(contentLocator,ps)
-	
-    url = url.replace("/manifest.mpd", "/")
-    
-    splitpath = url.split('/Manifest?device', 1)
-    
-    if len(splitpath) == 2:
-        url = splitpath[0] + "/"
-
-    if 'sdash/' in url:
-        spliturl = url.split('sdash/', 1)
-    
-        if len(spliturl) == 2:
-            url = '{urlpart1}sdash;vxttoken={token}/{urlpart2}'.format(urlpart1=spliturl[0], token=playToken, urlpart2=spliturl[1])
-    else:
-        spliturl = url.rsplit('/', 1)
-    
-        if len(spliturl) == 2:
-            url = '{urlpart1};vxttoken={token}/{urlpart2}'.format(urlpart1=spliturl[0], token=playToken, urlpart2=spliturl[1]) 
-
-    xbmc.log("new url : " + url,2)
-    listitem = xbmcgui.ListItem() 
-    xbmcplugin.addDirectoryItem(addon_handle, url, listitem)
 
 def Logout():
     oesptoken=addon.getSetting("oespToken")
@@ -1553,14 +1537,75 @@ def ListNaZadanie2(_id):
         
         _id2 = categ.get('id',None)
 
-        url=BASURL+'/PL/pol/web/mediagroups/feeds/%s?byCategoryIds=%s&byHasCurrentVod=true&cityId=10&includeExternalProvider=ALL&onlyGoPlayable=true&sort=playCount7|desc'%(urllib_parse.quote(str(_id)),urllib_parse.quote(str(_id2)))
+        url=BASURL+'/PL/pol/web/mediagroups/feeds/%s?byCategoryIds=%s&byHasCurrentVod=true&cityId=10&includeExternalProvider=ALL&onlyGoPlayable=true&sort=playCount7|desc'%(urllib.parse.quote(str(_id)),urllib.parse.quote(str(_id2)))
 
         add_item(url, tyt,icona, 'listnazadanie', infoLabels={'title':tyt,"plot": tyt},fanart=FANART,folder=True,IsPlayable=False)
     xbmcplugin.addSortMethod( handle=int( sys.argv[ 1 ] ), sortMethod=xbmcplugin.SORT_METHOD_TITLE)
 #
     xbmcplugin.endOfDirectory(addon_handle) 
     
-    
+def liveChList():
+    locid=addon.getSetting("locid")
+    oesptoken=addon.getSetting("oespToken")
+    cook=addon.getSetting("kuks")
+    username = addon.getSetting("username")
+
+    headers = {
+        'User-Agent': UA,
+        'Accept': 'application/json',
+        'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
+        'Referer': 'https://www.upctv.pl',
+        'Content-Type': 'application/json',
+        'X-Client-Id': '4.31.13||'+UA,
+        'X-OESP-Token': oesptoken,
+        'X-OESP-Username': username,
+        'X-OESP-Profile-Id': sharedProfileId,
+        'Origin': 'https://www.upctv.pl',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+    }
+
+    url=BASURL+'/PL/pol/web/channels?byLocationId='+locid+'&includeInvisible=true&personalised=true'
+    r = requests.get(url,verify=False,headers=headers)
+    response = r.json()
+
+    channs=response["channels"]
+    ar_chan=[]
+    for chan in channs:
+        stacja = chan['stationSchedules'][0]['station']
+        tytul = stacja['title']#
+        streams = stacja['videoStreams']#
+        if streams:
+            for stream in streams:
+                if 'manifest.mpd' in stream['streamingUrl']:
+                    mpdurl=stream['streamingUrl']
+                    conloc=stream['contentLocator']
+                    break
+                else:
+                    continue
+            ar_chan.append([PLchar(tytul),quote_plus(mpdurl+'*|*'+conloc)])
+    return ar_chan
+            
+
+def generate_m3u():#
+    #global sessionid
+    #if not sessionid:
+    #    sessionid = login()
+    if file_name == '' or path_m3u == '':
+        xbmcgui.Dialog().notification('UPC GO TV', 'Ustaw nazwe pliku oraz katalog docelowy.', xbmcgui.NOTIFICATION_ERROR)
+        return
+    xbmcgui.Dialog().notification('UPC GO TV', 'Generuje liste M3U.', xbmcgui.NOTIFICATION_INFO)
+    data = '#EXTM3U\n'
+    ChList = liveChList()
+    for item in ChList:
+        channelid = item[0]
+        chanUrl = item[1]
+        data += '#EXTINF:0 tvg-id="%s",%s\nplugin://plugin.video.horizongo/?mode=playchan&url=%s\n' % (channelid,channelid,chanUrl)#zmiana z amp;
+
+    f = xbmcvfs.File(path_m3u + file_name, 'w')
+    f.write(data)
+    f.close()
+    xbmcgui.Dialog().notification('UPC TV GO', 'Wygenerowano listę M3U.', xbmcgui.NOTIFICATION_INFO)
     
 def PLchar(char):
     if type(char) is not str:
@@ -1586,7 +1631,7 @@ def PLchar(char):
     return char    
 
 def router(paramstring):
-    params = dict(urllib_parse.parse_qsl(paramstring))
+    params = dict(urllib.parse.parse_qsl(paramstring))
     exlink = params.get('url', None)
     name= params.get('name', None)
     page = params.get('page','')
@@ -1594,6 +1639,12 @@ def router(paramstring):
     movie= params.get('movie', None)
     rys= params.get('image', None)
     mode = params.get('mode', None)
+    action = params.get('action', '')#
+    if action == 'BUILD_M3U':#
+        if addon.getSetting("zalogowany")=='true':
+            xbmcgui.Dialog().notification('UPC TV GO', 'Operacja wymaga zalogowania', xbmcgui.NOTIFICATION_INFO)
+        else:
+            generate_m3u()#
     if mode:
         if mode=="listfilmy":
             ListMovies(page)
@@ -1625,15 +1676,15 @@ def router(paramstring):
         elif mode == 'playchanpowt':    
             play_videopowt(exlink,movie)
             
-        elif mode == 'playchan':    
+        elif mode == 'playchan':
+            cnl=unquote(exlink).split('*|*')[1]
+            tkn=getToken(cnl,False)
+            if tkn == '':
+                LogHor()
             play_video(exlink)
         elif mode == 'getcrid':    
             getCrid(exlink)
             
-        elif mode == 'renew_token':
-            renew_token(exlink)
-            xbmcplugin.endOfDirectory(addon_handle)    
-
         elif mode=='search':
             query = xbmcgui.Dialog().input(u'Szukaj, Podaj tytuł:', type=xbmcgui.INPUT_ALPHANUM)
             if query: 
