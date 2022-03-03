@@ -35,11 +35,7 @@ def getToken(conloc,gg=False):
     hostapi = addon.getSetting("hostapi")
     uid=addon.getSetting("deviceId")
     old_token=addon.getSetting("token")
-    #print('conlock FN: '+str(conloc))
-    #print('oesptoken :'+oesptoken)
-    #print('cook: '+cook)
-    #print('username: '+username)
-    #print('sharedProfileId:'+sharedProfileId)
+
     headers = {
         'Host': hostapi,
         'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:87.0) Gecko/20100101 Firefox/87.0',
@@ -53,21 +49,20 @@ def getToken(conloc,gg=False):
         'Origin': 'https://www.upctv.pl',
         'Referer': 'https://www.upctv.pl/',
     }
-    
+
     data = {"contentLocator":conloc,'drmScheme':'sdash:BR-AVC-DASH'}
 
     response = requests.post('https://prod.oesp.upctv.pl/oesp/v4/PL/pol/web/license/token', headers=headers, json=data,verify=False)
 
     responsecheck=response.text
-  #  xbmc.log('@#@responsecheck1: %s' % str(responsecheck), LOGNOTICE)
-  
+
     response=response.json()
 
     a=''
 
     if 'code":"concurrency"' in responsecheck:
 
-        xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Maksymalna liczba odtwarzaczy.\nZamknij jeden z odtwarzaczy.',xbmcgui.NOTIFICATION_INFO, 9000,False)    
+        xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Maksymalna liczba odtwarzaczy.\nZamknij jeden z odtwarzaczy.',xbmcgui.NOTIFICATION_INFO, 9000,False)
         sys.exit(0)
 
     try:
@@ -76,28 +71,24 @@ def getToken(conloc,gg=False):
             if not 'type":"requestBody' in responsecheck:
                 a = xbmcgui.Dialog().numeric(heading='Podaj PIN:',type=0,defaultt='')
                 if a:
-                
+
                     data = {"value":str(a)}
                     if response[0].get('code',None)=="adultCredentialVerification":
                         response = requests.post(BASURL+'/PL/pol/web/profile/adult/verifypin', headers=headers, json=data,verify=False)
-                
-                    else:    
+
+                    else:
                         response = requests.post(BASURL+'/PL/pol/web/profile/parental/verifypin', headers=headers, json=data,verify=False)
                     getSession()
-                
+
                     data = {"contentLocator":conloc}
-                
+
                     response = requests.post(BASURL+'/PL/pol/web/license/token', headers=headers, json=data,verify=False)
                     responsecheck = response.text
                     response=response.json()
-                 #   xbmc.log('@#@responsecheck2: %s' % str(responsecheck), LOGNOTICE)
-                    
-                    
-                    
-                
+
     except:
         pass
-    
+
     dod=''
     try:
         if not a:
@@ -122,11 +113,8 @@ def getToken(conloc,gg=False):
             'Origin': 'https://www.upctv.pl',
             'Referer': 'https://www.upctv.pl/',
         }
-        
-        data = {"contentLocator":conloc}#,'drmScheme':'sdash:BR-AVC-DASH'}
-        
-        
 
+        data = {"contentLocator":conloc}#,'drmScheme':'sdash:BR-AVC-DASH'}
 
         if 'REPLAY' in conloc:
             data.update({"deviceId": uid,'drmScheme':'sdash:BR-AVC-DASH','token':unquote(old_token),'playState':'playing','offset':1})    #,'playState':'playing','token':old_token,'offset':1
@@ -135,21 +123,19 @@ def getToken(conloc,gg=False):
 
         response = requests.post('https://prod.oesp.upctv.pl/oesp/v4/PL/pol/web/license/token', headers=headers, json=data,verify=False)
         responsecheck=response.text
-      #  xbmc.log('@#@responsecheck3: %s' % str(responsecheck), LOGNOTICE)
         response=response.json()
         if 'code":"concurrency"' in responsecheck:
 
-            xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Maksymalna liczba odtwarzaczy.\n Zamknij jeden z odtwarzaczy i spróbuj ponownie.',xbmcgui.NOTIFICATION_INFO, 9000,False)    
+            xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Maksymalna liczba odtwarzaczy.\n Zamknij jeden z odtwarzaczy i spróbuj ponownie.',xbmcgui.NOTIFICATION_INFO, 9000,False)
             sys.exit(0)
 
         dod = response['token']
         dod = quote(dod)
     except Exception as ecv:
         xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Nie można odtworzyć poza siecią UPC',xbmcgui.NOTIFICATION_INFO, 8000,False)
-      #  xbmc.log('@#@blad w: %s' % str(ecv), LOGNOTICE)
 
     return dod
-    
+
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
@@ -157,19 +143,14 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
         """Handle http get requests, used for manifest"""
 
         path = self.path  # Path with parameters received from request e.g. "/manifest?id=234324"
-        #print('HTTP GET Request received to {}'.format(path))
         manifest_data=b''
 
-        #print('RUN_proxy')
         time_now=int(time.time())
         time_tkn=int(addon.getSetting('time_token'))
-        #print('TIME_TOKEN:'+str(time_tkn))
-        #print('TIME_NOW:'+str(time_now))
-        
+
         if addon.getSetting('source')=='vod':
-        
+
             if 'index.mpd/Manifest' in path:
-                #print('proxy_manifest')
                 url_stream=''
                 url_stream=path.split('manifest=')[1]
                 hdr =  eval(addon.getSetting('heaNHL'))
@@ -183,7 +164,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 url=''
                 orgurl=addon.getSetting('orgurl')
                 if time_now>=time_tkn+60 and '.mpd' in path:
-                    #print('REDIRECT_NEW_TOKEN')
                     contentlocator=addon.getSetting('conloc')
                     oesptoken=addon.getSetting("oespToken")
                     username=addon.getSetting('username')
@@ -194,18 +174,15 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     addon.setSetting('time_token',str(int(time.time())))
                     url_stream=path.split('manifest=')[1]
                     url=url_stream.replace(addon.getSetting('first_token'),addon.getSetting('token'))
-                 
+
                 else:
-                    #print('REDIRECT_OLD_TOKEN')
                     url_stream=path.split('manifest=')[1]
                     url=url_stream.replace(addon.getSetting('first_token'),old_token)
-                       
-                #print("NEW_URL:"+url) 
+
                 self.send_response(302)
                 self.send_header('Location', url)
                 self.end_headers()
-                #self.connection.close()
-        
+
         if addon.getSetting('source')=='livetv':
             if 'manifest.mpd' in path:
                 url_stream=path.split('manifest=')[1].replace(addon.getSetting('first_token'),addon.getSetting('token'))
@@ -220,7 +197,6 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                 url=''
                 orgurl=addon.getSetting('orgurl')
                 if time_now>=time_tkn+60 and 'manifest.mpd' not in path:
-                    #print('REDIRECT_NEW_TOKEN')
                     contentlocator=addon.getSetting('conloc')
                     oesptoken=addon.getSetting("oespToken")
                     username=addon.getSetting('username')
@@ -232,22 +208,18 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     url_stream=path.split('manifest=')[1]
                     url=url_stream.replace(addon.getSetting('first_token'),addon.getSetting('token'))
                 else:
-                    #print('REDIRECT_OLD_TOKEN')
                     url_stream=path.split('manifest=')[1]
                     url=url_stream.replace(addon.getSetting('first_token'),old_token)
-                
-                #print("NEW_URL:"+url) 
+
                 self.send_response(302)
                 self.send_header('Location', url)
                 self.end_headers()
-                #self.connection.close()
-        
+
 
     def do_POST(self):
         """Handle http post requests, used for license"""
         path = self.path  # Path with parameters received from request e.g. "/license?id=234324"
 
-        #print('HTTP POST Request received to {}'.format(path))
         if '/licensetv' not in path:
             self.send_response(404)
             self.end_headers()
@@ -255,49 +227,31 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
         length = int(self.headers.get('content-length', 0))
         isa_data = self.rfile.read(length)
-        #if PY3:
-        #    ww=self.headers
-        #    try:
-        #        isa_data = self.rfile.read(length)#.split(b'!') 
-        #    except:
-        #        isa_data = self.rfile.read(length).encode('utf-8').split('!')
-        #else:
-        #    isa_data = self.rfile.read(length).decode('utf-8').split('!')
-        
 
         challenge = isa_data
         path2 = path.split('censetv=')[-1]
-
         ab=eval(addon.getSetting('heaNHL'))
-       # xbmc.log('ababab: %s' % str(ab), level=xbmc.LOGNOTICE)
-    #    xbmc.log('challengechallenge: %s' % str(challenge), level=xbmc.LOGNOTICE)
-		
 
         result = requests.post(url=path2, headers=ab, data=challenge, verify=False).content
-        #if PY3:# = sys.version_info >= (3,0,0)
-        #    xbmc.log('rezultat: %s' % str(result), level=xbmc.LOGINFO)
-        #else:
-        #    xbmc.log('rezultat: %s' % str(result), level=xbmc.LOGNOTICE)
-            
-            
+
+
         self.send_response(200)
         self.end_headers()
-        
+
         self.wfile.write(result)
 
-            
-            
+
+
 def find_free_port():
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.bind(('', 0))
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         addon.setSetting('proxyport',str(s.getsockname()[1]))
-        return s.getsockname()[1]           
+        return s.getsockname()[1]
 
 
 address = '127.0.0.1'  # Localhost
 
 port = find_free_port()
 server_inst = TCPServer((address, port), SimpleHTTPRequestHandler)
-# The follow line is only for test purpose, you have to implement a way to stop the http service!
 server_inst.serve_forever()
