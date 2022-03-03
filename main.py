@@ -41,14 +41,6 @@ icona = RESOURCES+'../icon.png'
 
 sharedProfileId = addon.getSetting('sharedProfileId')
 
-
-#BASURL = addon.getSetting("baseurl") #'https://web-api-pepper.horizon.tv/oesp/v2'
-#if not BASURL:
-#    addon.setSetting('baseurl',"https://api.oesp.upctv.pl/oesp/v2")
-#hostapi = addon.getSetting("hostapi")#   'api.oesp.upctv.pl'
-#if not hostapi:
-#    addon.setSetting('hostapi','api.oesp.upctv.pl')
-
 BASURL = addon.getSetting("baseurl") #'https://web-api-pepper.horizon.tv/oesp/v2'
 if not BASURL:
     addon.setSetting('baseurl',"https://prod.oesp.upctv.pl/oesp/v4")
@@ -163,6 +155,7 @@ def getCrid(crid):
             play_video(mpdcon)
     else:
         xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Nie masz dostępu do tego materiału',xbmcgui.NOTIFICATION_INFO, 8000,False)
+
 def getSeriesCat():
     locid=addon.getSetting("locid")
     oesptoken=addon.getSetting("oespToken")
@@ -189,9 +182,6 @@ def getSeriesCat():
     url ='https://www.upctv.pl/obo_pl/filmy-i-seriale/seriale.components.json'
 
     r = requests.get(url,verify=False,headers=headers)
-
-
-
     response = r.json()
 
     for key, value in response.items():
@@ -206,18 +196,27 @@ def getSeriesCat():
     xbmcplugin.setContent(int(sys.argv[1]), 'videos')
     xbmcplugin.endOfDirectory(addon_handle)
 
+def addZero(x):
+        if x<=9:
+            return '0'+str(x)
+        else:
+            return str(x)
+
+
 def getTime(st, en, epg=False):
 
     import time
     nowts = int(time.time())
 
-    from datetime import datetime
     czas1=st/1000
     czas2=en/1000
 
-    czas11=(datetime.utcfromtimestamp(czas1+7200).strftime('%H:%M'))
-    czas22=(datetime.utcfromtimestamp(czas2+7200).strftime('%H:%M'))
-    czas111 =(datetime.utcfromtimestamp(czas1+7200).strftime('[COLOR khaki]%d.%m.[/COLOR] %H:%M'))
+    c1=time.localtime(czas1)
+    c2=time.localtime(czas2)
+
+    czas11=addZero(c1.tm_hour)+':'+addZero(c1.tm_min)
+    czas22=addZero(c2.tm_hour)+':'+addZero(c2.tm_min)
+    czas111='[COLOR khaki]'+addZero(c1.tm_mday)+'.'+addZero(c1.tm_mon)+'. [/COLOR]'+czas11
 
     if epg:
         if czas1<nowts and czas2>nowts:
@@ -235,12 +234,19 @@ def getTime(st, en, epg=False):
 
 def getEPG(powt=False):
 
-    import datetime
-    now = datetime.datetime.now()
-    czas= now.strftime('%Y%m%d')
+    timestamp=time.time()
+    now=time.localtime()
+    now_hour=now[3]
+    day_period=int(now_hour/6)+1
+    date=str(now[0])+addZero(now[1])+addZero(now[2])
 
-    wczor = now - datetime.timedelta(days=1)
-    czaswczor = wczor.strftime('%Y%m%d')
+    day_period_next=day_period+1
+    date_next=date
+
+    if day_period==4:
+        day_period_next=1
+        tomorrow=time.localtime(timestamp+24*60*60)
+        date_next=str(tomorrow[0])+addZero(tomorrow[1])+addZero(tomorrow[2])
 
     username = addon.getSetting("username")
     locid=addon.getSetting("locid")
@@ -257,19 +263,19 @@ def getEPG(powt=False):
     }
 
     entrieses=[]
-    for i in range(1, 5):
-        url = BASURL+'/PL/pol/web/programschedules/%s/%s'%(str(czas),str(i))
-        r = requests.get(url,verify=False,headers=headers)
-        response = r.json()
-        entries = response["entries"]
-        entrieses.append(entries)
 
-    for i in range(1, 5):
-        url = BASURL+'/PL/pol/web/programschedules/%s/%s'%(str(czaswczor),str(i))
-        r = requests.get(url,verify=False,headers=headers)
-        response = r.json()
-        entries = response["entries"]
-        entrieses.append(entries)
+    url = BASURL+'/PL/pol/web/programschedules/%s/%s'%(date,str(day_period))
+    r = requests.get(url,verify=False,headers=headers)
+    response = r.json()
+    entries = response["entries"]
+    entrieses.append(entries)
+
+    url = BASURL+'/PL/pol/web/programschedules/%s/%s'%(date_next,str(day_period_next))
+    r = requests.get(url,verify=False,headers=headers)
+    response = r.json()
+    entries = response["entries"]
+    entrieses.append(entries)
+
     return entrieses
 
 def getEPG2(entrieses,id_):
@@ -298,7 +304,9 @@ def getEPG2(entrieses,id_):
                         mpdcon=''
                         rys2=''
                         rys=''
-                        tyt2 += '{} - {} {}[CR]'.format(st,kon,PLchar(tytul))
+                        tyt_new = '{} - {} {}[CR]'.format(st,kon,PLchar(tytul))
+                        if tyt_new not in tyt2:
+                            tyt2 += tyt_new
 
                 else:
                     continue
@@ -325,16 +333,12 @@ def Search(query):
         'Connection': 'keep-alive',
     }
 
-
-
-
     import datetime
     teraz = datetime.datetime.now()
     tydz1 = teraz + datetime.timedelta(days=7)
     tydz2 = teraz - datetime.timedelta(days=7)
     dotydzdoprzodu = int((tydz1 - datetime.datetime(1970, 1, 1)).total_seconds())#*1000
     dotydzienwstecz = int((tydz2 - datetime.datetime(1970, 1, 1)).total_seconds())#*1000
-
 
 
     url='https://web-api-pepper.horizon.tv/oesp/v2/PL/pol/web/search/content?byBroadcastStartTimeRange={}~{}&byCatalog=providers,tvPrograms,moviesAndSeries&byEntitled=true&numItems=96&personalised=true&q={}'.format(str(dotydzienwstecz), str(dotydzdoprzodu), query)
@@ -371,45 +375,65 @@ def getMovSeries(entries):
     if entries:
         xbmcplugin.endOfDirectory(addon_handle)
 
-
+def calendar():#
+    time_now=time.time()
+    i=0
+    ar_date=[]
+    while i<=7:
+        d=time.localtime(time_now-i*24*60*60)
+        date=str(d.tm_year)+'-'+addZero(d.tm_mon)+'-'+addZero(d.tm_mday)
+        ar_date.append(date)
+        i +=1
+    return ar_date
 
 def ListPowtorki(id_,rys):
-
-    entries2=''
-    tyt2=''
-    entrieses= getEPG(True)
-
-    for entries in entrieses:
-        for entry in entries:
-            if str(id_)==entry['o']:
-                entries2 = entry["l"]
-                break
-            else:
-                continue
-
-        if entries2:
-            for entry in (entries2):
-
-                if entry["r"]:
-                    tytul = entry["t"]
-
-                    rozp = entry["s"]
-                    koniec = entry["e"]
-                    st,kon,stdata,tstime = getTime(rozp,koniec)
-
-                    if st:
-
-                        mpdcon=entry["i"]
-
-                        tyt2 = '{} - {} {}'.format(stdata,kon,PLchar(tytul))
-                        add_item(mpdcon, tyt2,rys, 'playchanpowt', movie = id_, infoLabels={"plot": tytul,'genre':str(tstime)},fanart=FANART,folder=False,IsPlayable=True)
-
-                else:
-                    continue
-    xbmcplugin.addSortMethod( handle=int( sys.argv[ 1 ] ), sortMethod=xbmcplugin.SORT_METHOD_GENRE)
-
+    cdr=calendar()
+    for c in cdr:
+        li=xbmcgui.ListItem(c)
+        li.setProperty("IsPlayable", 'true')
+        li.setInfo(type='video', infoLabels={'title': c,'sorttitle': c,'plot': ''})
+        url = build_url({'mode':'genReplayList','movie':id_,'date':c,'image':rys})
+        xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li, isFolder=True)
     xbmcplugin.endOfDirectory(addon_handle)
 
+def ListPowtorki2(date,id_,rys):
+    periods=['1','2','3','4']
+    programs=[]
+    for p in periods:
+        epg_url='https://prod.oesp.upctv.pl/oesp/v4/PL/pol/web/programschedules/'+date.replace('-','')+'/'+p
+        resp_epg=requests.get(epg_url)
+        epg_data=json.loads(resp_epg.text)
+        for e in epg_data['entries']:
+            if e['o']==id_:
+                for prog in e['l']:
+                    if 'c' in prog:
+                        if len(programs)==0:
+                            if prog['r']== True:
+                                programs.append([prog['i'],prog['t'],prog['s'],prog['e'],prog['c']])
+                        else:
+                            if prog['r']== True:
+                                dupl=0
+                                for pp in programs:
+                                    if pp[0]==prog['i']:
+                                        dupl=1
+                                        break
+                                if (dupl==0):
+                                    print(prog)
+                                    programs.append([prog['i'],prog['t'],prog['s'],prog['e'],prog['c']])
+                break
+
+    for pr in programs:
+        tytul = pr[1]
+        rozp = pr[2]
+        koniec = pr[3]
+        st,kon,stdata,tstime = getTime(rozp,koniec)
+        if st:
+            mpdcon=pr[0]
+            tyt2 = '{} - {} {}'.format(stdata,kon,PLchar(tytul))
+            add_item(mpdcon,tyt2,rys, 'playchanpowt', movie = id_, infoLabels={"plot": tytul,'genre':str(tstime)},fanart=FANART,folder=False,IsPlayable=True)
+
+    xbmcplugin.addSortMethod( handle=int( sys.argv[ 1 ] ), sortMethod=xbmcplugin.SORT_METHOD_GENRE)
+    xbmcplugin.endOfDirectory(addon_handle)
 
 def ListSerial(categid,pg):
     pg=int(pg)
@@ -910,34 +934,36 @@ def ListChan(typ):
     for chan in channs:
 
         stacja = chan['stationSchedules'][0]['station']
-        statid = stacja['id']
-        plot = getEPG2(entries,statid)
-        imgs = stacja['images']
-        for img in imgs:
-            if img['assetType']=='station-logo-large':
-                imig=img['url']
-                break
-            else:
-                continue
-        tytul = stacja['title']
-        streams = stacja['videoStreams']
-        if streams:
-            for stream in streams:
-                if 'manifest.mpd' in stream['streamingUrl']:
-                    mpdurl=stream['streamingUrl']
-                    conloc=stream['contentLocator']
+        if 'dubel' not in stacja['id']: #bez dubli
+            statid = stacja['id']
+            plot = getEPG2(entries,statid)
+            imgs = stacja['images']
+            for img in imgs:
+                if img['assetType']=='station-logo-large':
+                    imig=img['url']
                     break
                 else:
                     continue
+            tytul = stacja['title']
+            streams = stacja['videoStreams']
+            if streams:
+                for stream in streams:
+                    if 'manifest.mpd' in stream['streamingUrl']:
+                        mpdurl=stream['streamingUrl']
+                        conloc=stream['contentLocator']
+                        break
+                    else:
+                        continue
 
-            fold = False
-            playab = True
-            mod = "playchan"
-            if typ == 'replay':
-                fold = True
-                playab = False
-                mod = 'listpowtorki'
-            add_item(mpdurl+'*|*'+conloc, PLchar(tytul),imig, mod, movie = statid, infoLabels={"plot": plot}, fanart = FANART, folder=fold,IsPlayable=playab)
+                fold = False
+                playab = True
+                mod = "playchan"
+                if typ == 'replay':
+                    fold = True
+                    playab = False
+                    mod = 'listpowtorki'
+                add_item(mpdurl+'*|*'+conloc, PLchar(tytul),imig, mod, movie = statid, infoLabels={'title': PLchar(tytul),"plot": plot}, fanart = FANART, folder=fold,IsPlayable=playab)
+    xbmcplugin.addSortMethod( int( sys.argv[ 1 ]) , xbmcplugin.SORT_METHOD_TITLE)
 
 def LogHor():
     hostapi = addon.getSetting("hostapi")
@@ -986,7 +1012,10 @@ def LogHor():
                 xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Błędne dane logowania',xbmcgui.NOTIFICATION_INFO, 8000,False)
                 add_item('', r"[B][COLOR yellow]Zaloguj[/B][/COLOR]",icona, "zaloguj", folder=False, fanart=FANART)
             else:
-
+                if response['customer']['replayTvAvailable']==True:
+                    addon.setSetting('isReplay','1')
+                else:
+                    addon.setSetting('isReplay','0')
                 if 'customer' in response:
                     try:
                         sharedProfileId = response['customer']['sharedProfileId']
@@ -1045,6 +1074,10 @@ def getSession():
     addon.setSetting('kuks',sc)
 
     if 'customer' in response:
+        if response['customer']['replayTvAvailable']==True:
+            addon.setSetting('isReplay','1')
+        else:
+            addon.setSetting('isReplay','0')
         try:
             sharedProfileId = response['customer']['sharedProfileId']
             addon.setSetting('sharedProfileId',sharedProfileId)
@@ -1183,7 +1216,10 @@ def getToken(conloc,gg=False):
 
         if 'reason":"prohibited"' in responsecheck or 'code":"adultCredentialVerification"' in responsecheck and not 'code":"ipBlocked' in responsecheck:# and not 'type":"requestBody' in responsecheck:
             if not 'type":"requestBody' in responsecheck:
-                a = xbmcgui.Dialog().numeric(heading='Podaj PIN:',type=0,defaultt='')
+                if addon.getSetting('pin')!='':
+                    a = addon.getSetting('pin')
+                else:
+                    a = xbmcgui.Dialog().numeric(heading='Podaj PIN:',type=0,defaultt='')
                 if a:
 
                     data = {"value":str(a)}
@@ -1320,15 +1356,7 @@ def getMPDCONpowt(crid,id_):
     r = requests.get(url,verify=False,headers=headers)
     response = r.json()
 
-    imi = response.get("imi",None)
-    mediaGroupId = response.get("mediaGroupId",None)
-
-
     mediaGroupId = response.get("scCridImi",None)
-
-
-
-    url=BASURL+'/PL/pol/web/playout/replay/'+mediaGroupId+','+imi+'?abrType=BR-AVC-DASH'#&sessionMode=online'
 
     url=BASURL+'/PL/pol/web/playout/replay/'+mediaGroupId+'?abrType=BR-AVC-DASH'#&sessionMode=online'
 
@@ -1341,9 +1369,6 @@ def getMPDCONpowt(crid,id_):
 
     mpdcon=mpdurl+'*|*'+conloc
     return mpdcon
-
-
-
 
 def play_videopowt(crid,id_):
     mpdcon=getMPDCONpowt(crid,id_)
@@ -1415,6 +1440,7 @@ def getPlayListItem(mpdcon):
             else:
                 newItem.setProperty("inputstreamaddon", is_helper.inputstream_addon)
             newItem.setProperty('inputstream.adaptive.manifest_update_parameter', 'full')
+            newItem.setProperty('inputstream.adaptive.play_timeshift_buffer', 'true')#
             newItem.setProperty("inputstream.adaptive.manifest_type", PROTOCOL)
             newItem.setProperty("inputstream.adaptive.license_type", DRM)
             newItem.setProperty("inputstream.adaptive.license_key", LICKEY)
@@ -1468,10 +1494,10 @@ def home():
 def KanalyMenu():
 
     add_item('', r"Na żywo",icona, "listchan", folder=True, fanart=FANART)
-    add_item('replay', r"Replay",icona, "listchan", folder=True, fanart=FANART)
+    if addon.getSetting('isReplay')=='1':
+        add_item('replay', r"Replay",icona, "listchan", folder=True, fanart=FANART)
     add_item('', r"Kanały na żądanie",icona, "nazadanie", folder=True, fanart=FANART)
     xbmcplugin.endOfDirectory(addon_handle)
-
 
 def naZadanie():
 
@@ -1508,7 +1534,6 @@ def naZadanie():
     xbmcplugin.setContent(int(sys.argv[1]), 'videos')
     xbmcplugin.endOfDirectory(addon_handle)
 
-
 def ListNaZadanie2(_id):
     oesptoken=addon.getSetting("oespToken")
     cook=addon.getSetting("kuks")
@@ -1526,8 +1551,6 @@ def ListNaZadanie2(_id):
         'Origin': 'https://www.upctv.pl',
         'Connection': 'keep-alive',
     }
-
-
 
     url=BASURL+'/PL/pol/web/mediagroups/feeds/%s/categories?byHasCurrentVod=true&cityId=10'%str(_id)
     response = requests.get(url, headers=headers,verify=False).json()
@@ -1586,7 +1609,6 @@ def liveChList():
             ar_chan.append([PLchar(tytul),quote_plus(mpdurl+'*|*'+conloc)])
     return ar_chan
 
-
 def generate_m3u():#
     #global sessionid
     #if not sessionid:
@@ -1639,6 +1661,7 @@ def router(paramstring):
     movie= params.get('movie', None)
     rys= params.get('image', None)
     mode = params.get('mode', None)
+    date=params.get('date', None)
     action = params.get('action', '')#
     if action == 'BUILD_M3U':#
         if addon.getSetting("zalogowany")=='true':
@@ -1660,6 +1683,9 @@ def router(paramstring):
 
         elif mode=='listpowtorki':
             ListPowtorki(movie,rys)
+
+        elif mode=='genReplayList':
+            ListPowtorki2(date,movie,rys)
 
         elif mode=='listdzieci':
             ListDzieci(page)
