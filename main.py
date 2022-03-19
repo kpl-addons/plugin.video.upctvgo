@@ -333,47 +333,123 @@ def Search(query):
         'Connection': 'keep-alive',
     }
 
-    import datetime
-    teraz = datetime.datetime.now()
-    tydz1 = teraz + datetime.timedelta(days=7)
-    tydz2 = teraz - datetime.timedelta(days=7)
-    dotydzdoprzodu = int((tydz1 - datetime.datetime(1970, 1, 1)).total_seconds())#*1000
-    dotydzienwstecz = int((tydz2 - datetime.datetime(1970, 1, 1)).total_seconds())#*1000
-
-
-    url='https://web-api-pepper.horizon.tv/oesp/v2/PL/pol/web/search/content?byBroadcastStartTimeRange={}~{}&byCatalog=providers,tvPrograms,moviesAndSeries&byEntitled=true&numItems=96&personalised=true&q={}'.format(str(dotydzienwstecz), str(dotydzdoprzodu), query)
-
-    url='https://prod.oesp.horizon.tv/oesp/v4/PL/pol/web/search-contents/'+query+'?clientType=209&contentSourceId=1&contentSourceId=101&contentSourceId=2&contentSourceId=3&filterTimeWindowEnd='+str(dotydzdoprzodu)+'&filterTimeWindowStart='+str(dotydzienwstecz)+'&filterVodAvailableNow=true&includeExternalProvider=ALL&includeNotEntitled=false&maxResults=100&mergingOn=true&startResults=0'
-
+    ts=int(time.time())-24*60*60
+    te=int(time.time())+24*60*60
+    url='https://prod.oesp.upctv.pl/oesp/v4/PL/pol/web/search-contents/'+query+'?clientType=209&contentSourceId=1&contentSourceId=101&contentSourceId=2&contentSourceId=3&filterTimeWindowEnd='+str(te)+'&filterTimeWindowStart='+str(ts)+'&filterVodAvailableNow=true&includeNotEntitled=false&maxRes=HD&maxResults=100&mergingOn=true&startResults=0'
     r = requests.get(url,verify=False,headers=headers)
     responses = r.json()
-
     if responses:
-        getMovSeries(responses)
+        searchResults(responses)
 
         xbmcplugin.endOfDirectory(addon_handle)
 
-def getMovSeries(entries):
+def searchResults(data):
+    #print(data)
+    for d in data:
+        if d['contentSource']=='2': #VOD
+            if 'contentType' in d:
+                if d['contentType']=='vod': #VOD źródła (np. filmy)
+                    r=requests.get('https://prod.oesp.upctv.pl/oesp/v4/PL/pol/web/mediagroups/'+d['contentId'],verify=False).json()
+                    id=d['contentId']
+                    tytul=d['name'] + ' [VOD]'
+                    rys=d['associatedPicture']
+                    mod='getcrid'
+                    rodz=''
+                    if 'categories' in r:
+                        for c in r['categories']:
+                            rodz+=c['title']+', '
+                    if 'description' in r:
+                        plot= rodz+'\n'+ r['description']
+                    else:
+                        plot= rodz
+                    fold=False
+                    playab=True
+                    add_item(id, tytul,rys, mod, infoLabels={"plot": plot},fanart=FANART,folder=fold,IsPlayable=playab)
 
-    for grup in entries:
-        plot=''
+            if 'groupType' in d:
+                if d['groupType']=='series': #VOD serie źródeł (np. sezony seriali)
+                    id=d['series']['seriesId']
+                    tytul=d['series']['seriesName'] + ' ('+str(d['series']['expectedNumberOfEpisodes'])+' odc.)' + ' [VOD]'
+                    rys=d['associatedPicture']
+                    mod='listseasons'
+                    plot=tytul
+                    fold=True
+                    playab=False
+                    add_item(id, tytul,rys, mod, infoLabels={"plot": plot},fanart=FANART,folder=fold,IsPlayable=playab)
 
-        if    "contentType" in grup:
-            if grup["contentType"]== "vod":
-                tytul = grup["name"]
-                rys = grup["associatedPicture"]
-                id = grup["contentId"]
-                dod = '' if grup["product"]["entitlementState"]=="Entitled" else '(-)'
-                tytul = tytul+dod
-                fold=False
-                mod='getcrid'
-                playab=True
+        elif d['contentSource']=='1' and addon.getSetting('isReplay')=='1'and 'contentType' not in d: #Replay
+            crid=''
+            tytul=''
+            rys=d['associatedPicture']
+            if d['groupType']=='multisource':
+                crid=d['contentId']
+                tytul=d['name']+ ' [TV]'
+            if d['groupType']=='series':
+                crid=d['series']['seriesId']
+                tytul=d['series']['seriesName']+ ' (serial) [TV]'
+            mod='searchReplayTV'
+            plot=tytul
+            fold=True
+            playab=False
+            add_item(crid, tytul,rys, mod, infoLabels={"plot": plot},fanart=FANART,folder=fold,IsPlayable=playab)
 
-                plot =plot if plot else tytul
-                add_item(id, tytul,rys, mod, infoLabels={"plot": plot},fanart=FANART,folder=fold,IsPlayable=playab)
-
-    if entries:
+    if data:
         xbmcplugin.endOfDirectory(addon_handle)
+
+def searchReplayTV(crid):
+    locid=addon.getSetting("locid")
+    te=int(time.time())*1000
+    ts=te-7*24*60*60*1000
+    period=str(ts)+'~'+str(te)
+    url='https://prod.oesp.upctv.pl/oesp/v4/PL/pol/web/listings?byLocationId='+locid+'&byMediaGroupId='+crid+'&byResolutions=SD,HD&byStartTime='+period+'&range=1-250&sort=startTime|asc'
+    resp=requests.get(url,verify=False).json()
+    prgms=[]
+    chData_str=addon.getSetting('chData')
+    print(chData_str)
+    for l in resp['listings']:
+        stID_locid=l['stationId'].replace(':',':'+locid+'-')
+        if (l['replayTvAvailable']==True) and (stID_locid in chData_str):
+            for c in eval(chData_str):
+                if c[1]==stID_locid:
+                    ch=c[0]
+                    break
+            T_start=time.localtime(l['startTime']/1000)
+            emisja='[B]Emisja:[/B] {} [{}.{}] {}:{}'.format(ch,addZero(T_start[2]),addZero(T_start[1]),addZero(T_start[3]),addZero(T_start[4]))
+            title=l['program']['title']
+            if l['program']['mediaType']=='Episode':
+                title+=' (seria '+l['program']['seriesNumber']+' odc. '+l['program']['seriesEpisodeNumber']+')'
+            else:
+                title+=' (rok. prod: '+l['program']['year']+')'
+            categ=''
+            if 'categories' in l['program']:
+                for c in l['program']['categories']:
+                    categ+=c['title']+'/'
+            descr=''
+            if 'description' in l['program']:
+                descr=l['program']['description']
+            plot='[B]'+title+'[/B]\n[I]'+categ+'[/I]\n'+descr+'\n'+emisja
+            pict=''
+            for p in l['program']['images']:
+                if p['assetType']=='HighResPortrait':
+                    pict=p['url']
+                    break
+            prog_id=l['id']
+            statId=l['stationId']
+            if len(prgms)>0:
+                dupl_test=0
+                for pr in prgms:
+                    if pr[0]==prog_id:
+                        dupl_test=1
+                        break
+                if dupl_test==0:
+                    prgms.append([prog_id,statId,title,plot,pict])
+            else:
+                prgms.append([prog_id,statId,title,plot,pict])
+
+    for program in prgms:
+        add_item(program[0],program[2],program[4],'playchanpowt', movie = program[1], infoLabels={"plot": program[3]},fanart=FANART,folder=False,IsPlayable=True)
+
+    xbmcplugin.endOfDirectory(addon_handle)
 
 def calendar():#
     time_now=time.time()
@@ -418,7 +494,6 @@ def ListPowtorki2(date,id_,rys):
                                         dupl=1
                                         break
                                 if (dupl==0):
-                                    print(prog)
                                     programs.append([prog['i'],prog['t'],prog['s'],prog['e'],prog['c']])
                 break
 
@@ -435,192 +510,29 @@ def ListPowtorki2(date,id_,rys):
     xbmcplugin.addSortMethod( handle=int( sys.argv[ 1 ] ), sortMethod=xbmcplugin.SORT_METHOD_GENRE)
     xbmcplugin.endOfDirectory(addon_handle)
 
-def ListSerial(categid,pg):
-    pg=int(pg)
-    locid=addon.getSetting("locid")
-    oesptoken=addon.getSetting("oespToken")
-    cook=addon.getSetting("kuks")
-    username = addon.getSetting("username")
-
-    headers = {
-        'Host': hostapi,
-        'User-Agent': UA,
-        'Accept': 'application/json',
-        'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
-        'Content-Type': 'application/json',
-        'X-Client-Id': '4.31.13||'+UA,
-        'X-OESP-Profile-Id': sharedProfileId,
-        'X-OESP-Token': oesptoken,
-        'X-OESP-Username': username,
-        'Origin': 'https://www.upctv.pl',
-        'Referer': 'https://www.upctv.pl/',
-        'Cookie':cook,
-    }
-
-    rng=str(int(pg))+'-'+str(int(pg)+29)
-
-    url=BASURL+'/PL/pol/web/mediagroups/feeds/'+categid+'?byHasCurrentVod=true&includeExternalProvider=ALL&onlyGoPlayable=true&range='+rng
-    r = requests.get(url,verify=False,headers=headers)
-    response = r.json()
-
-    grups=response["mediaGroups"]
-    for grup in grups:
-        id = grup['id']
-
-        tytul = PLchar(grup['title'])
-        plot = grup.get('description',None)
-        plot = plot if plot else tytul
-
-        imgs = grup['images']
-        rys=''
-        rys2=''
-
-        if 'currentChildMediaTypeCounts' in grup:
-            odc = grup.get( 'currentChildMediaTypeCounts' ,None).get('Episode',None)
-        else:
-            odc = grup["currentSvodCount"]
-
-        tytul = '{} ({} odc.)'.format(tytul, str(odc))
-        d = {img['assetType']:img['url'] for img in imgs}
-        if 'ScreenGrab1' in d:
-            rys = d['ScreenGrab1']
-        else:
-            for img in imgs:
-                if img['assetType']=='HighResPortrait':
-                    rys=img['url']
-                    break
-                elif img['assetType']=="HighResLandscape":
-                    rys=img['url']
-                    break
-                elif img ['assetType']== "boxart-xlarge":
-                    rys=img['url']
-                    break
-                else:
-                    continue
-
-        add_item(id, tytul,rys, 'listseasons', infoLabels={"plot": plot},fanart=FANART,folder=True)
-    if (int(pg)+30)<=response['totalResults']:
-        add_item(name='[COLOR yellow][I]Następna strona[/I][/COLOR]', url=categid, mode='listserial', image='', infoLabels=False,folder=True, fanart=FANART,IsPlayable=False,page=pg+30)
-
-    xbmcplugin.setContent(int(sys.argv[1]), 'videos')
+def VODbyCateg(categ):#
+    #categ: DLA_DZIECI, myprime, seriale, Channels (Channels=Kanały na Żądanie)
+    url_vod='https://www.upctv.pl/pl/filmy-i-seriale/'+categ+'.components.json'
+    resp=requests.get(url_vod,verify=False).json()
+    keys=resp.keys()
+    for k in keys:
+        if 'contentdiscovery' in k:
+            kk=resp[k]['settings']
+            if 'contentFeed' in kk:
+                li=xbmcgui.ListItem(kk['moduleTitle'])
+                li.setProperty("IsPlayable", 'true')
+                li.setInfo(type='video', infoLabels={'title': kk['moduleTitle'],'sorttitle': kk['moduleTitle'],'plot': ''})
+                url = build_url({'mode':'vod_categ','url_cat_vod':kk['contentFeed'],'page':'1'})
+                xbmcplugin.addDirectoryItem(handle=addon_handle, url=url, listitem=li, isFolder=True)
     xbmcplugin.endOfDirectory(addon_handle)
 
-def ListNaZadanie(id_,pg):
-
+def VODbyCategLIST(url_cat_vod,pg):
     pg=int(pg)
-    locid=addon.getSetting("locid")
-    oesptoken=addon.getSetting("oespToken")
-    cook=addon.getSetting("kuks")
-    username = addon.getSetting("username")
-
-    headers = {
-        'Host': hostapi,
-        'User-Agent': UA,
-        'Accept': 'application/json',
-        'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
-        'Content-Type': 'application/json',
-        'X-Client-Id': '4.31.13||'+UA,
-        'X-OESP-Profile-Id': sharedProfileId,
-        'X-OESP-Token': oesptoken,
-        'X-OESP-Username': username,
-        'Origin': 'https://www.upctv.pl',
-        'Referer': 'https://www.upctv.pl/',
-        'Cookie':cook,
-    }
-
-
     rng=str(int(pg))+'-'+str(int(pg)+29)
-
-    url=id_+'&range=%s'%(str(rng))
-
-
-    r = requests.get(url,verify=False,headers=headers)
+    url='https://prod.oesp.upctv.pl/oesp/v4/PL/pol/web/mediagroups/feeds/'+url_cat_vod+'?byHasCurrentVod=true&byResolutions=SD,HD&includeExternalProvider=ALL&onlyGoPlayable=true&range='+rng+'&sort=playCount7|desc'
+    r = requests.get(url,verify=False)
     response = r.json()
-
     grups=response["mediaGroups"]
-    k=0
-    for grup in grups:
-
-        try:
-            epiz = grup["currentChildMediaTypeCounts"]["Episode"]
-        except:
-            epiz=''
-
-
-        id = grup['id']
-
-        tytul = grup.get('title',None)
-        tytul ='.' if not tytul else tytul
-        plot = grup.get('description',None)
-        plot = plot if plot else tytul
-        imgs = grup['images']
-        rys=''
-        rys2=''
-        d = {img['assetType']:img['url'] for img in imgs}
-        if 'ScreenGrab1' in d:
-            rys = d['ScreenGrab1']
-        else:
-            for img in imgs:
-                if img['assetType']=='HighResPortrait':
-                    rys=img['url']
-                    break
-                elif img['assetType']=="HighResLandscape":
-                    rys=img['url']
-                    break
-                elif img ['assetType']== "boxart-xlarge":
-                    rys=img['url']
-                    break
-                else:
-                    continue
-
-        fold=False
-        mod='getcrid'
-        playab=True
-        if epiz and grup["currentSvodCount"]>1:
-            fold=True
-            mod='listseasons'
-            playab=False
-            tytul ='%s (%s odc.)'%(PLchar(tytul),str(epiz))
-        add_item(id, tytul,rys, mod, infoLabels={"plot": plot},fanart=FANART,folder=fold,IsPlayable=playab)
-        k+=1
-    if (int(pg)+30)<=response['totalResults']:
-        add_item(name='[COLOR yellow][I]Następna strona[/I][/COLOR]', url=id_, mode='listnazadanie', image='', infoLabels=False,folder=True, fanart=FANART,IsPlayable=False,page=pg+30)
-    if k:
-        xbmcplugin.setContent(int(sys.argv[1]), 'videos')
-        xbmcplugin.endOfDirectory(addon_handle)
-
-
-
-def ListDzieci(pg):
-    pg=int(pg)
-    locid=addon.getSetting("locid")
-    oesptoken=addon.getSetting("oespToken")
-    cook=addon.getSetting("kuks")
-    username = addon.getSetting("username")
-
-    headers = {
-        'Host': hostapi,
-        'User-Agent': UA,
-        'Accept': 'application/json',
-        'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
-        'Content-Type': 'application/json',
-        'X-Client-Id': '4.31.13||'+UA,
-        'X-OESP-Profile-Id': sharedProfileId,
-        'X-OESP-Token': oesptoken,
-        'X-OESP-Username': username,
-        'Origin': 'https://www.upctv.pl',
-        'Referer': 'https://www.upctv.pl/',
-        'Cookie':cook,
-    }
-    rng=str(int(pg))+'-'+str(int(pg)+29)
-
-    url=BASURL+'/PL/pol/web/mediagroups/feeds/crid%3A~~2F~~2Fschange.com~~2F2798edbf-c8e3-4bba-b06f-c10832b82f47?byHasCurrentVod=true&includeExternalProvider=ALL&onlyGoPlayable=true&range='+rng
-
-    r = requests.get(url,verify=False,headers=headers)
-    response = r.json()
-
-    grups=response["mediaGroups"]
-
     for grup in grups:
         try:
             epiz = grup["currentChildMediaTypeCounts"]["Episode"]
@@ -666,7 +578,13 @@ def ListDzieci(pg):
             tytul ='%s (%s odc.)'%(PLchar(tytul),str(epiz))
         add_item(id, tytul,rys, mod, infoLabels={"plot": plot},fanart=FANART,folder=fold,IsPlayable=playab)
     if (int(pg)+30)<=response['totalResults']:
-        add_item(name='[COLOR yellow][I]Następna strona[/I][/COLOR]', url='', mode='listdzieci', image='', infoLabels=False,folder=True, fanart=FANART,IsPlayable=False,page=pg+30)
+        name='[COLOR yellow][I]Następna strona[/I][/COLOR]'
+        list_item = xbmcgui.ListItem(label=name)
+        infoLabels={'title': name,'plot':name}
+        list_item.setInfo(type="video", infoLabels=infoLabels)
+        list_item.setArt({'thumb': '', 'poster': '', 'banner': '', 'fanart': FANART})
+        url = build_url({'mode':'vod_categ','url_cat_vod':url_cat_vod,'page':str(pg+30)})
+        xbmcplugin.addDirectoryItem(handle=addon_handle,url=url,listitem=list_item,isFolder=True)
 
     xbmcplugin.setContent(int(sys.argv[1]), 'videos')
     xbmcplugin.endOfDirectory(addon_handle)
@@ -842,67 +760,12 @@ def ListSeasons(crid):
     except:
         xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Brak materiałów do wyświetlenia',xbmcgui.NOTIFICATION_INFO, 8000,False)
 
-def ListMovies(pg):
-    pg=int(pg)
-    locid=addon.getSetting("locid")
-    oesptoken=addon.getSetting("oespToken")
-    cook=addon.getSetting("kuks")
-    username = addon.getSetting("username")
-
-    headers = {
-        'User-Agent': UA,
-        'Accept': 'application/json',
-        'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
-        'Referer': 'https://www.upctv.pl',
-        'Content-Type': 'application/json',
-        'X-Client-Id': '4.31.13||'+UA,
-        'X-OESP-Token': oesptoken,
-        'X-OESP-Username': username,
-        'X-OESP-Profile-Id': sharedProfileId,
-        'Origin': 'https://www.upctv.pl',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-    }
-
-    rng=str(int(pg))+'-'+str(int(pg)+29)
-    url=BASURL+'/PL/pol/web/mediagroups/feeds/lgi-pl-vod-myprime-movies?byHasCurrentVod=true&range='+rng
-
-    filmurl=BASURL+'/PL/pol/web/mediagroups/feeds/crid%3A~~2F~~2Fschange.com~~2Fc28094fa-d306-4b80-b6c2-c7970fa32742?byHasCurrentVod=true&includeExternalProvider=ALL&onlyGoPlayable=true&range='+rng
-
-    r = requests.get(filmurl,verify=False,headers=headers)
-    response = r.json()
-    grups=response["mediaGroups"]
-    for grup in grups:
-        id = grup['id']
-        tytul = PLchar(grup['title'])
-        plot = PLchar(grup['description'])
-        imgs = grup['images']
-        rys=''
-        rys2=''
-
-        d = {img['assetType']:img['url'] for img in imgs}
-        if 'ScreenGrab1' in d:
-            rys = d['ScreenGrab1']
-        else:
-            for img in imgs:
-                if img['assetType']=='HighResPortrait':
-                    rys=img['url']
-                    break
-                elif img['assetType']=="HighResLandscape":
-                    rys=img['url']
-                    break
-                elif img ['assetType']== "boxart-xlarge":
-                    rys=img['url']
-                    break
-                else:
-                    continue
-
-        add_item(id, tytul,rys, 'getcrid', infoLabels={"plot": plot},fanart=FANART,folder=False,IsPlayable=True)
-    if (int(pg)+30)<=response['totalResults']:
-        add_item(name='[COLOR yellow][I]Następna strona[/I][/COLOR]', url='', mode='listfilmy', image='', infoLabels=False,folder=True, fanart=FANART,IsPlayable=False,page=pg+30)
-
-    xbmcplugin.setContent(int(sys.argv[1]), 'videos')
-    xbmcplugin.endOfDirectory(addon_handle)
+def getChanData(jc):#
+    chan_ar=[]
+    for c in jc['channels']:
+        if c['visible']==True and len(c['stationSchedules'][0]['station']['videoStreams'])!=0 and 'dubel' not in c['id']:
+            chan_ar.append([c['title'],c['id']])
+    return str(chan_ar)
 
 def ListChan(typ):
     locid=addon.getSetting("locid")
@@ -929,7 +792,11 @@ def ListChan(typ):
     r = requests.get(url,verify=False,headers=headers)
     response = r.json()
 
+    if addon.getSetting('chData')=='':#
+        addon.setSetting('chData',getChanData(response))
+
     channs=response["channels"]
+
     entries= getEPG()
     for chan in channs:
 
@@ -1042,6 +909,7 @@ def LogHor():
         addon.setSetting('zalogowany','true')
       #  xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Brak danych logowania',xbmcgui.NOTIFICATION_INFO, 8000,False)
         add_item('', r"[B][COLOR yellow]Zaloguj[/B][/COLOR]",icona, "zaloguj", folder=False, fanart=FANART)
+
 def getSession():
     BASURL = addon.getSetting("baseurl")
     hostapi = addon.getSetting("hostapi")
@@ -1178,9 +1046,8 @@ def uid():
     a = gen_hex_code(64,0)
     return a
 
-def getToken(conloc,gg=False):
+def getToken(conloc,isNotLive=False):
     oesptoken=addon.getSetting("oespToken")
-    cook=addon.getSetting("kuks")
     username = addon.getSetting("username")
     headers = {
         'Host': hostapi,
@@ -1196,7 +1063,15 @@ def getToken(conloc,gg=False):
         'Referer': 'https://www.upctv.pl/',
     }
 
-    data = {"contentLocator":conloc,'drmScheme':'sdash:BR-AVC-DASH'}
+    if (addon.getSetting('deviceId')==''):
+        addon.setSetting('deviceId',uid())
+    deviceId=addon.getSetting('deviceId')
+
+    data=''
+    if isNotLive:
+        data = {'contentLocator':conloc,'deviceId':deviceId,'drmScheme':'sdash:BR-AVC-DASH'}
+    else:
+        data = {'contentLocator':conloc,'deviceId':deviceId}
 
     response = requests.post(BASURL+'/PL/pol/web/license/token', headers=headers, json=data,verify=False)
 
@@ -1213,7 +1088,6 @@ def getToken(conloc,gg=False):
         sys.exit(0)
 
     try:
-
         if 'reason":"prohibited"' in responsecheck or 'code":"adultCredentialVerification"' in responsecheck and not 'code":"ipBlocked' in responsecheck:# and not 'type":"requestBody' in responsecheck:
             if not 'type":"requestBody' in responsecheck:
                 if addon.getSetting('pin')!='':
@@ -1230,10 +1104,10 @@ def getToken(conloc,gg=False):
                         response = requests.post(BASURL+'/PL/pol/web/profile/parental/verifypin', headers=headers, json=data,verify=False)
                     getSession()
 
-                    data = {"contentLocator":conloc}
+                    #data = {"contentLocator":conloc}
 
                     response = requests.post(BASURL+'/PL/pol/web/license/token', headers=headers, json=data,verify=False)
-                    responsecheck = response.text
+                    #responsecheck = response.text
                     response=response.json()
                  #   xbmc.log('@#@responsecheck2: %s' % str(responsecheck), LOGNOTICE)
 
@@ -1241,15 +1115,9 @@ def getToken(conloc,gg=False):
         pass
 
     dod=''
-    try:
 
-        if not a:
-            dod = response['token']
-            data = {"contentLocator":conloc,"token":dod}
-        else:
-            data = {"contentLocator":conloc}
+    try:
         oesptoken=addon.getSetting("oespToken")
-        cook=addon.getSetting("kuks")
         username = addon.getSetting("username")
 
         headers = {
@@ -1266,30 +1134,19 @@ def getToken(conloc,gg=False):
             'Referer': 'https://www.upctv.pl/',
         }
 
-        data = {"contentLocator":conloc}#,'drmScheme':'sdash:BR-AVC-DASH'}
-
-        if 'REPLAY' in conloc:
-            addon.setSetting('deviceId',uid())
-            UID=addon.getSetting('deviceId')
-            data.update({"deviceId": UID,'drmScheme':'sdash:BR-AVC-DASH'})
-
-        if gg:
-            addon.setSetting('deviceId',uid())
-            UID=addon.getSetting('deviceId')
-            data.update({"deviceId": UID,'drmScheme':'sdash:BR-AVC-DASH'})
         response = requests.post(BASURL+'/PL/pol/web/license/token', headers=headers, json=data,verify=False)
         responsecheck=response.text
       #  xbmc.log('@#@responsecheck3: %s' % str(responsecheck), LOGNOTICE)
         response=response.json()
         if 'code":"concurrency"' in responsecheck:
-
             xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Maksymalna liczba odtwarzaczy.\n Zamknij jeden z odtwarzaczy i spróbuj ponownie.',xbmcgui.NOTIFICATION_INFO, 9000,False)
             sys.exit(0)
 
         dod = response['token']
         dod = urllib.parse.quote(dod)
+
     except Exception as ecv:
-        xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Nie można odtworzyć poza siecią UPC',xbmcgui.NOTIFICATION_INFO, 8000,False)
+        xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Brak uprawnień.',xbmcgui.NOTIFICATION_INFO, 8000,False)#Nie można odtworzyć poza siecią UPC
 
       #  xbmc.log('@#@blad w: %s' % str(ecv), LOGNOTICE)
     return dod
@@ -1483,88 +1340,23 @@ def home():
     if addon.getSetting('zalogowany') == 'false':#'addon.setSetting('zalogowany','false')
     #username = addon.getSetting('zalogowany')
 
-        add_item('', r"Kanały",icona, "kanaly", folder=True, fanart=FANART)
-        add_item('', r"Filmy",icona, "listfilmy", folder=True, fanart=FANART)
-        add_item('', r"Seriale",icona, "listcategserial", folder=True, fanart=FANART)
-        add_item('', r"Dzieci",icona, "listdzieci", folder=True, fanart=FANART)
+        add_item('', r"TV",icona, "kanaly", folder=True, fanart=FANART)
+        add_item('', r"Filmy i seriale (VOD)",icona, "vod", folder=True, fanart=FANART)
         add_item('', r"Szukaj",icona, "search", folder=True, fanart=FANART)
         if addon.getSetting("zalogowany")=='false':
             add_item('', r"[B][COLOR lightgreen]Wyloguj[/B][/COLOR]",icona, "wyloguj", folder=False, fanart=FANART)
 
 def KanalyMenu():
-
     add_item('', r"Na żywo",icona, "listchan", folder=True, fanart=FANART)
     if addon.getSetting('isReplay')=='1':
         add_item('replay', r"Replay",icona, "listchan", folder=True, fanart=FANART)
+    xbmcplugin.endOfDirectory(addon_handle)
+
+def VODMenu():
+    add_item('', r"MYPRIME",icona, "listfilmy", folder=True, fanart=FANART)
+    add_item('', r"Seriale",icona, "listserial", folder=True, fanart=FANART)
+    add_item('', r"Dla Dzieci",icona, "listdzieci", folder=True, fanart=FANART)
     add_item('', r"Kanały na żądanie",icona, "nazadanie", folder=True, fanart=FANART)
-    xbmcplugin.endOfDirectory(addon_handle)
-
-def naZadanie():
-
-    oesptoken=addon.getSetting("oespToken")
-    cook=addon.getSetting("kuks")
-    username = addon.getSetting("username")
-
-    headers = {
-        'User-Agent': UA,
-        'Accept': 'application/json',
-        'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
-        'Content-Type': 'application/json',
-        'X-Client-Id': '4.31.13||'+UA,
-        'X-OESP-Token': oesptoken,
-        'X-OESP-Username': username,
-        'X-OESP-Profile-Id': sharedProfileId,
-        'Origin': 'https://www.upctv.pl',
-
-        'Connection': 'keep-alive',
-    }
-
-    url = 'https://www.upctv.pl/obo_pl/filmy-i-seriale/Channels.components.json'
-
-    response = requests.get(url, headers=headers,verify=False).json()
-
-    for key, value in response.items():
-        if 'contentdiscovery' in key:
-
-            _id = value.get("settings",None).get("contentFeed",None)#["title"]
-            tyt = value.get("settings",None).get("moduleTitle",None)#["title"]
-
-            add_item(_id, tyt,icona, "listnazadanie2", folder=True, fanart=FANART)
-
-    xbmcplugin.setContent(int(sys.argv[1]), 'videos')
-    xbmcplugin.endOfDirectory(addon_handle)
-
-def ListNaZadanie2(_id):
-    oesptoken=addon.getSetting("oespToken")
-    cook=addon.getSetting("kuks")
-    username = addon.getSetting("username")
-
-    headers = {
-        'User-Agent': UA,
-        'Accept': 'application/json',
-        'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
-        'Content-Type': 'application/json',
-        'X-Client-Id': '4.31.13||'+UA,
-        'X-OESP-Token': oesptoken,
-        'X-OESP-Username': username,
-        'X-OESP-Profile-Id': sharedProfileId,
-        'Origin': 'https://www.upctv.pl',
-        'Connection': 'keep-alive',
-    }
-
-    url=BASURL+'/PL/pol/web/mediagroups/feeds/%s/categories?byHasCurrentVod=true&cityId=10'%str(_id)
-    response = requests.get(url, headers=headers,verify=False).json()
-    categs = response.get('categories',None)
-    for categ in categs:
-        tyt = PLchar(categ.get('title',None))
-
-        _id2 = categ.get('id',None)
-
-        url=BASURL+'/PL/pol/web/mediagroups/feeds/%s?byCategoryIds=%s&byHasCurrentVod=true&cityId=10&includeExternalProvider=ALL&onlyGoPlayable=true&sort=playCount7|desc'%(urllib.parse.quote(str(_id)),urllib.parse.quote(str(_id2)))
-
-        add_item(url, tyt,icona, 'listnazadanie', infoLabels={'title':tyt,"plot": tyt},fanart=FANART,folder=True,IsPlayable=False)
-    xbmcplugin.addSortMethod( handle=int( sys.argv[ 1 ] ), sortMethod=xbmcplugin.SORT_METHOD_TITLE)
-#
     xbmcplugin.endOfDirectory(addon_handle)
 
 def liveChList():
@@ -1610,9 +1402,6 @@ def liveChList():
     return ar_chan
 
 def generate_m3u():#
-    #global sessionid
-    #if not sessionid:
-    #    sessionid = login()
     if file_name == '' or path_m3u == '':
         xbmcgui.Dialog().notification('UPC GO TV', 'Ustaw nazwe pliku oraz katalog docelowy.', xbmcgui.NOTIFICATION_ERROR)
         return
@@ -1662,6 +1451,7 @@ def router(paramstring):
     rys= params.get('image', None)
     mode = params.get('mode', None)
     date=params.get('date', None)
+    url_cat_vod=params.get('url_cat_vod', None)
     action = params.get('action', '')#
     if action == 'BUILD_M3U':#
         if addon.getSetting("zalogowany")=='true':
@@ -1670,16 +1460,18 @@ def router(paramstring):
             generate_m3u()#
     if mode:
         if mode=="listfilmy":
-            ListMovies(page)
+            #ListMovies(page)
+            VODbyCateg('myprime')
+
         elif mode=='listchan':
             ListChan(exlink)
             xbmcplugin.endOfDirectory(addon_handle)
 
-        elif mode=="listcategserial":
-            getSeriesCat()
-
         elif mode=="kanaly":
             KanalyMenu()
+
+        elif mode=="vod":
+            VODMenu()
 
         elif mode=='listpowtorki':
             ListPowtorki(movie,rys)
@@ -1688,10 +1480,15 @@ def router(paramstring):
             ListPowtorki2(date,movie,rys)
 
         elif mode=='listdzieci':
-            ListDzieci(page)
+            #ListDzieci(page)
+            VODbyCateg('DLA_DZIECI')
+
+        elif mode=='vod_categ':
+            VODbyCategLIST(url_cat_vod,page)
 
         elif mode =='listserial':
-            ListSerial(exlink,page)
+            #ListSerial(exlink,page)
+            VODbyCateg('seriale')
 
         elif mode =='listseasons':
             ListSeasons(exlink)
@@ -1703,11 +1500,13 @@ def router(paramstring):
             play_videopowt(exlink,movie)
 
         elif mode == 'playchan':
-            cnl=unquote(exlink).split('*|*')[1]
-            tkn=getToken(cnl,False)
+            orgurl,cnl=unquote(exlink).split('*|*')
+            ps = True if '/sdash' in orgurl else False
+            tkn=getToken(cnl,ps)
             if tkn == '':
                 LogHor()
             play_video(exlink)
+
         elif mode == 'getcrid':
             getCrid(exlink)
 
@@ -1716,23 +1515,22 @@ def router(paramstring):
             if query:
                 Search(query)
 
+        elif mode=='searchReplayTV':
+            searchReplayTV(exlink)
+
         elif mode=="zaloguj":
             addon.setSetting('zalogowany', 'false')
             addon.openSettings()
             addon.setSetting('wyloguj','false')
             xbmc.executebuiltin('Container.Refresh()')
+
         elif mode=="wyloguj":
             Logout()
             xbmc.executebuiltin('Container.Refresh()')
 
-
         elif mode=='nazadanie':
-            naZadanie()
-
-        elif mode=='listnazadanie':
-            ListNaZadanie(exlink,page)
-        elif mode=='listnazadanie2':
-            ListNaZadanie2(exlink)
+            #naZadanie()
+            VODbyCateg('Channels')
 
     else:
         home()
