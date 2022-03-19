@@ -27,15 +27,13 @@ import requests
 import sys
 PY3 = sys.version_info >= (3,0,0)
 
-def getToken(conloc,gg=False):
+def refreshToken(conloc,isNotLive=False):
     oesptoken=addon.getSetting("oespToken")
-    cook=addon.getSetting("kuks")
     username = addon.getSetting("username")
     sharedProfileId =addon.getSetting('sharedProfileId')
     hostapi = addon.getSetting("hostapi")
-    uid=addon.getSetting("deviceId")
+    deviceId=addon.getSetting("deviceId")
     old_token=addon.getSetting("token")
-
     headers = {
         'Host': hostapi,
         'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:87.0) Gecko/20100101 Firefox/87.0',
@@ -49,93 +47,17 @@ def getToken(conloc,gg=False):
         'Origin': 'https://www.upctv.pl',
         'Referer': 'https://www.upctv.pl/',
     }
-
-    data = {"contentLocator":conloc,'drmScheme':'sdash:BR-AVC-DASH'}
+    data=''
+    if isNotLive:
+        data = {'contentLocator':conloc,'deviceId':deviceId,'drmScheme':'sdash:BR-AVC-DASH','token':unquote(old_token),'playState':'playing','offset':1}
+    else:
+        data = {'contentLocator':conloc,'deviceId':deviceId,'token':unquote(old_token),'playState':'playing','offset':1}
 
     response = requests.post('https://prod.oesp.upctv.pl/oesp/v4/PL/pol/web/license/token', headers=headers, json=data,verify=False)
-
-    responsecheck=response.text
-
     response=response.json()
+    tkn=response['token']
 
-    a=''
-
-    if 'code":"concurrency"' in responsecheck:
-
-        xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Maksymalna liczba odtwarzaczy.\nZamknij jeden z odtwarzaczy.',xbmcgui.NOTIFICATION_INFO, 9000,False)
-        sys.exit(0)
-
-    try:
-
-        if 'reason":"prohibited"' in responsecheck or 'code":"adultCredentialVerification"' in responsecheck and not 'code":"ipBlocked' in responsecheck:# and not 'type":"requestBody' in responsecheck:
-            if not 'type":"requestBody' in responsecheck:
-                a = xbmcgui.Dialog().numeric(heading='Podaj PIN:',type=0,defaultt='')
-                if a:
-
-                    data = {"value":str(a)}
-                    if response[0].get('code',None)=="adultCredentialVerification":
-                        response = requests.post(BASURL+'/PL/pol/web/profile/adult/verifypin', headers=headers, json=data,verify=False)
-
-                    else:
-                        response = requests.post(BASURL+'/PL/pol/web/profile/parental/verifypin', headers=headers, json=data,verify=False)
-                    getSession()
-
-                    data = {"contentLocator":conloc}
-
-                    response = requests.post(BASURL+'/PL/pol/web/license/token', headers=headers, json=data,verify=False)
-                    responsecheck = response.text
-                    response=response.json()
-
-    except:
-        pass
-
-    dod=''
-    try:
-        if not a:
-            dod = response['token']
-            data = {"contentLocator":conloc,"token":dod}
-        else:
-            data = {"contentLocator":conloc}
-        oesptoken=addon.getSetting("oespToken")
-        cook=addon.getSetting("kuks")
-        username = addon.getSetting("username")
-
-        headers = {
-            'Host': hostapi,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:87.0) Gecko/20100101 Firefox/87.0',
-            'Accept': 'application/json',
-            'Accept-Language': 'pl,en-US;q=0.7,en;q=0.3',
-            'Content-Type': 'application/json',
-            'X-Client-Id': '4.31.13||'+'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:87.0) Gecko/20100101 Firefox/87.0',
-            'X-OESP-Token': oesptoken,
-            'X-OESP-Username': username,
-            'X-OESP-Profile-Id': sharedProfileId,
-            'Origin': 'https://www.upctv.pl',
-            'Referer': 'https://www.upctv.pl/',
-        }
-
-        data = {"contentLocator":conloc}#,'drmScheme':'sdash:BR-AVC-DASH'}
-
-        if 'REPLAY' in conloc:
-            data.update({"deviceId": uid,'drmScheme':'sdash:BR-AVC-DASH','token':unquote(old_token),'playState':'playing','offset':1})    #,'playState':'playing','token':old_token,'offset':1
-        if gg:
-            data.update({"deviceId": uid,'drmScheme':'sdash:BR-AVC-DASH','token':unquote(old_token),'playState':'playing','offset':1})  #,'playState':'playing','token':old_token,'offset':1
-
-        response = requests.post('https://prod.oesp.upctv.pl/oesp/v4/PL/pol/web/license/token', headers=headers, json=data,verify=False)
-        responsecheck=response.text
-        response=response.json()
-        if 'code":"concurrency"' in responsecheck:
-
-            xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Maksymalna liczba odtwarzaczy.\n Zamknij jeden z odtwarzaczy i spróbuj ponownie.',xbmcgui.NOTIFICATION_INFO, 9000,False)
-            sys.exit(0)
-
-        dod = response['token']
-        dod = quote(dod)
-    except Exception as ecv:
-        xbmcgui.Dialog().notification('[B]Błąd[/B]', 'Nie można odtworzyć poza siecią UPC',xbmcgui.NOTIFICATION_INFO, 8000,False)
-
-    return dod
-
+    return tkn
 
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
@@ -169,7 +91,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     username=addon.getSetting('username')
                     uri=addon.getSetting('uri')
                     ps = True if '/sdash' in orgurl else False
-                    playToken = getToken(contentlocator,ps)
+                    playToken = refreshToken(contentlocator,ps)
                     addon.setSetting('token',playToken)
                     addon.setSetting('time_token',str(int(time.time())))
                     url_stream=path.split('manifest=')[1]
@@ -202,7 +124,7 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
                     username=addon.getSetting('username')
                     uri=addon.getSetting('uri')
                     ps = True if '/sdash' in orgurl else False
-                    playToken = getToken(contentlocator,ps)
+                    playToken = refreshToken(contentlocator,ps)
                     addon.setSetting('token',playToken)
                     addon.setSetting('time_token',str(int(time.time())))
                     url_stream=path.split('manifest=')[1]
@@ -234,10 +156,8 @@ class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
 
         result = requests.post(url=path2, headers=ab, data=challenge, verify=False).content
 
-
         self.send_response(200)
         self.end_headers()
-
         self.wfile.write(result)
 
 
