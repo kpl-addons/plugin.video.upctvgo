@@ -17,5 +17,6 @@
     </category>
 	<setting id="zalogowany" value="false" default="false"/>
 	<setting id="isReplay" value="" default="false"/>
+	<setting id="deviceId" value="" default=""/>
 </settings>
  
